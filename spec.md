@@ -1,4 +1,4 @@
-# Manga Translation Extension — MVP Spec (Revised)
+# Manga Translation Extension - MVP Spec (Revised)
 
 ## 1. Goal
 
@@ -20,7 +20,7 @@ This avoids automatic bubble detection and maximizes UX while keeping the MVP si
 ### 2.2 Compatibility Notes (MVP)
 - MVP **must work** on Chrome/Arc.
 - Firefox is supported, but any browser gaps (especially around screenshot capture timing/permissions) may require small adjustments.
-- The **side panel UI is implemented as an injected DOM panel**, not a browser-native “side panel” API, for maximum cross-browser compatibility.
+- The **side panel UI is implemented as an injected DOM panel**, not a browser-native "side panel" API, for maximum cross-browser compatibility.
 
 ---
 
@@ -29,7 +29,7 @@ This avoids automatic bubble detection and maximizes UX while keeping the MVP si
 - Automatic bubble detection
 - Automatic reading order inference
 - Editing or modifying the underlying image
-- Multi-site heuristics beyond “works on RawSakura in practice”
+- Multi-site heuristics beyond "works on RawSakura in practice"
 - Incremental streaming translation (batch per session only)
 - Persisting sessions across page reloads
 
@@ -62,11 +62,11 @@ When Translate Mode is **ON**:
    - N increments sequentially
 4. Each rectangle renders:
    - border
-   - number badge (`#1`, `#2`, …)
+   - number badge (`#1`, `#2`, ...)
 5. Maximum rectangles per session: **15**
 
 #### 4.2.1 Context Takeover (No Scrolling / No Page Interaction)
-Translate Mode is a full “control takeover”:
+Translate Mode is a full "control takeover":
 - **No page scrolling is allowed** while Translate Mode is ON.
   - Prevent wheel/trackpad scrolling
   - Prevent keyboard scrolling (`Space`, `PageUp/Down`, `Home/End`, arrows)
@@ -187,7 +187,7 @@ Notes:
 
 Steps:
 1. Capture screenshot
-2. Convert rects from CSS pixels → screenshot pixels via DPR scaling
+2. Convert rects from CSS pixels -> screenshot pixels via DPR scaling
 3. Clamp to bitmap bounds
 4. Crop each rectangle into its own image
 5. **Downscale each crop to a max dimension** to bound latency and request size (see Config/Flags)
@@ -244,7 +244,7 @@ Single provider for MVP.
   - Return **strict JSON only** (no markdown)
 
 Failure handling:
-- Empty or unreadable text → return empty strings + warning, not a whole-session failure
+- Empty or unreadable text -> return empty strings + warning, not a whole-session failure
 - If the request fails entirely (network/auth/provider):
   - mark each row as failed and show a single toast
 
@@ -322,15 +322,15 @@ Eviction:
 ## 10. Error Handling (MVP)
 
 Global:
-- Screenshot failure → toast: “Capture failed”
-- Provider/network/auth failure → toast: “Translation failed”
-- Enter with zero rectangles → no-op
-- Exceed max rectangles → toast: “Max 15 selections”
+- Screenshot failure -> toast: "Capture failed"
+- Provider/network/auth failure -> toast: "Translation failed"
+- Enter with zero rectangles -> no-op
+- Exceed max rectangles -> toast: "Max 15 selections"
 
 Per-rect:
-- Unreadable OCR → row shows warning (“Unreadable”)
-- Partial OCR → row shows warning (“Partial text”)
-- Per-rect crop failure → row shows `failed`
+- Unreadable OCR -> row shows warning ("Unreadable")
+- Partial OCR -> row shows warning ("Partial text")
+- Per-rect crop failure -> row shows `failed`
 
 ---
 
@@ -369,21 +369,21 @@ export const FLAGS = {
 
 ```
 src/
-├─ config/
-│  ├─ hotkeys.ts          // hotkey normalization + parsing
-│  └─ flags.ts            // all tunables (max rects, crop size, cache, etc.)
-├─ content/
-│  ├─ content.ts          // mode toggle, event wiring, scroll lock
-│  ├─ overlay.ts          // selection + rectangle rendering
-│  └─ panel.ts            // injected DOM side panel UI
-├─ background/
-│  └─ serviceWorker.ts    // screenshot, crop, provider, cache
-├─ providers/
-│  └─ openaiVision.ts
-├─ shared/
-│  └─ types.ts
-└─ options/
-   └─ options.ts          // API key input UI (MVP)
+  config/
+    hotkeys.ts          // hotkey normalization + parsing
+    flags.ts            // all tunables (max rects, crop size, cache, etc.)
+  content/
+    content.ts          // mode toggle, event wiring, scroll lock
+    overlay.ts          // selection + rectangle rendering
+    panel.ts            // injected DOM side panel UI
+  background/
+    serviceWorker.ts    // screenshot, crop, provider, cache
+  providers/
+    openaiVision.ts
+  shared/
+    types.ts
+  options/
+    options.ts          // API key input UI (MVP)
 ```
 
 ---
@@ -422,3 +422,9 @@ On a RawSakura chapter page, user can:
 - Streaming / incremental translation
 - Multi-site normalization
 - Local OCR models
+
+---
+
+## 16. Architecture Documentation
+
+The detailed architecture lives in `docs/architecture/ARCHITECTURE.md` with per-module functional specifications in `docs/architecture/modules/`.
