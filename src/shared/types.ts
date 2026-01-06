@@ -15,6 +15,10 @@ export type Result = {
   error?: string
 }
 
+export type Attempt = Result & {
+  failCount?: number
+}
+
 export type Session = {
   url: string
   viewport: { width: number; height: number; dpr: number }
@@ -54,6 +58,23 @@ export type TranslateSessionResponse = {
   error?: string
 }
 
+export type TranslateRectRequest = {
+  type: "TRANSLATE_RECT"
+  payload: {
+    rect: Rect
+    viewport: { width: number; height: number; dpr: number }
+    url: string
+  }
+}
+
+export type TranslateRectResponse = {
+  type: "TRANSLATE_RECT_RESULT"
+  payload: {
+    result: Result
+  }
+  error?: string
+}
+
 export type Settings = {
   apiKey: string
 }
@@ -75,7 +96,11 @@ export type SettingsResponse = {
 
 export type BackgroundRequest =
   | TranslateSessionRequest
+  | TranslateRectRequest
   | GetSettingsRequest
   | SetSettingsRequest
 
-export type BackgroundResponse = TranslateSessionResponse | SettingsResponse
+export type BackgroundResponse =
+  | TranslateSessionResponse
+  | TranslateRectResponse
+  | SettingsResponse

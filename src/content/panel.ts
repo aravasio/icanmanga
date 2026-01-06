@@ -1,10 +1,11 @@
 import { FLAGS } from "../config/flags"
-import type { Rect, Result } from "../shared/types"
+import type { Attempt, Rect, Result } from "../shared/types"
 import { overlayStyles } from "./styles"
 
 let panelEl: HTMLDivElement | null = null
 let bodyEl: HTMLDivElement | null = null
 let hoverHandler: ((rectId: string | null) => void) | null = null
+let retryHandler: ((rectId: string) => void) | null = null
 let styleEl: HTMLStyleElement | null = null
 
 function injectStyles() {
@@ -46,7 +47,13 @@ export function unmountPanel() {
   bodyEl = null
 }
 
-export function setRows(rects: Rect[], results?: Result[], phase: PanelPhase = "pending") {
+export function setRows(
+  rects: Rect[],
+  results?: Result[],
+  phase: PanelPhase = "pending",
+  attemptsByRect?: Record<string, Attempt[]>,
+  translatingIds?: Set<string>
+) {
   if (!bodyEl) return
   bodyEl.innerHTML = ""
   const resultMap = new Map(results?.map((result) => [result.id, result]) ?? [])
@@ -66,31 +73,44 @@ export function setRows(rects: Rect[], results?: Result[], phase: PanelPhase = "
     const status = document.createElement("div")
     status.className = "icanmanga-row-status"
 
-    const result = resultMap.get(rect.id)
-    if (!result) {
+    const attempts = attemptsByRect?.[rect.id] ?? []
+    const latestAttempt = attempts.length ? attempts[attempts.length - 1] : resultMap.get(rect.id)
+    const isTranslating = translatingIds?.has(rect.id) ?? false
+
+    if (isTranslating) {
+      status.textContent = "translating..."
+    } else if (!latestAttempt) {
       status.textContent = phase === "translating" ? "translating..." : "pending"
-    } else if (result.error) {
-      status.textContent = result.error
+    } else if (latestAttempt.error) {
+      const failCount = latestAttempt.failCount ?? 1
+      status.textContent = `failed (${failCount}/3)`
     } else {
       status.textContent = "translated"
     }
 
     row.append(title, status)
 
-    if (result && !result.error) {
-      if (result.jp) {
-        row.append(createTextBlock("JP", result.jp))
-        row.append(createCopyActions(result.jp, "Copy JP"))
-      }
-      if (result.en) {
-        row.append(createTextBlock("EN", result.en))
-        row.append(createCopyActions(result.en, "Copy EN"))
-      }
-      if (result.warnings?.length) {
-        const warning = document.createElement("div")
-        warning.className = "icanmanga-row-status"
-        warning.textContent = result.warnings.join(" ")
-        row.append(warning)
+    if (attempts.length) {
+      attempts.forEach((attempt, attemptIndex) => {
+        row.append(createAttemptBlock(rect.id, attempt, attemptIndex, attempts.length, isTranslating))
+      })
+    } else {
+      const result = resultMap.get(rect.id)
+      if (result && !result.error) {
+        if (result.jp) {
+          row.append(createTextBlock("JP", result.jp))
+          row.append(createCopyActions(result.jp, "Copy JP"))
+        }
+        if (result.en) {
+          row.append(createTextBlock("EN", result.en))
+          row.append(createCopyActions(result.en, "Copy EN"))
+        }
+        if (result.warnings?.length) {
+          const warning = document.createElement("div")
+          warning.className = "icanmanga-row-status"
+          warning.textContent = result.warnings.join(" ")
+          row.append(warning)
+        }
       }
     }
 
@@ -100,6 +120,10 @@ export function setRows(rects: Rect[], results?: Result[], phase: PanelPhase = "
 
 export function setRowHoverHandler(callback: (rectId: string | null) => void) {
   hoverHandler = callback
+}
+
+export function setRetryHandler(callback: (rectId: string) => void) {
+  retryHandler = callback
 }
 
 export function setHoverRowId(id: string | null) {
@@ -112,6 +136,67 @@ export function setHoverRowId(id: string | null) {
       rowEl.classList.remove("hover")
     }
   })
+}
+
+function createAttemptBlock(
+  rectId: string,
+  attempt: Attempt,
+  attemptIndex: number,
+  totalAttempts: number,
+  isTranslating: boolean
+) {
+  const wrap = document.createElement("div")
+  wrap.className = "icanmanga-attempt"
+
+  const header = document.createElement("div")
+  header.className = "icanmanga-attempt-header"
+  const label = document.createElement("span")
+  label.className = "icanmanga-attempt-label"
+  label.textContent = `Attempt ${attemptIndex + 1}${attemptIndex + 1 === totalAttempts ? " (latest)" : ""}`
+  header.append(label)
+
+  if (attempt.error) {
+    const failCount = attempt.failCount ?? 1
+    const status = document.createElement("span")
+    status.className = "icanmanga-attempt-status error"
+    status.textContent = `failed (${failCount}/3)`
+    header.append(status)
+  }
+
+  wrap.append(header)
+
+  if (attempt.error) {
+    const actions = document.createElement("div")
+    actions.className = "icanmanga-actions"
+
+    const retryButton = document.createElement("button")
+    retryButton.className = "icanmanga-button"
+    retryButton.type = "button"
+    retryButton.textContent = "Retry"
+    retryButton.disabled = isTranslating || (attempt.failCount ?? 1) >= 3
+    retryButton.addEventListener("click", () => retryHandler?.(rectId))
+
+    actions.append(retryButton)
+    wrap.append(actions)
+    return wrap
+  }
+
+  if (attempt.jp) {
+    wrap.append(createTextBlock("JP", attempt.jp))
+    wrap.append(createCopyActions(attempt.jp, "Copy JP"))
+  }
+  if (attempt.en) {
+    wrap.append(createTextBlock("EN", attempt.en))
+    wrap.append(createCopyActions(attempt.en, "Copy EN"))
+  }
+  if (attempt.warnings?.length) {
+    const warning = document.createElement("div")
+    warning.className = "icanmanga-row-status"
+    warning.textContent = attempt.warnings.join(" ")
+    wrap.append(warning)
+  }
+
+  return wrap
 }
 
 export function showToast(message: string, type: "error" | "info" = "info") {

@@ -4,7 +4,14 @@ import {
   normalizeHotkey,
   normalizeHotkeyList,
 } from "../config/hotkeys"
-import type { Rect, Result, Session, TranslateSessionResponse } from "../shared/types"
+import type {
+  Attempt,
+  Rect,
+  Result,
+  Session,
+  TranslateRectResponse,
+  TranslateSessionResponse,
+} from "../shared/types"
 import {
   mountOverlay,
   onRectAdded,
@@ -16,13 +23,19 @@ import {
 import {
   mountPanel,
   setHoverRowId,
+  setRetryHandler,
   setRowHoverHandler,
   setRows,
   showToast,
   unmountPanel,
 } from "./panel"
 
-let session: Session | null = null
+type SessionState = Session & {
+  attempts: Record<string, Attempt[]>
+  translatingIds: Set<string>
+}
+
+let session: SessionState | null = null
 let isTranslateMode = false
 let scrollLock: { x: number; y: number } | null = null
 let originalStyles:
@@ -109,8 +122,10 @@ function enterTranslateMode() {
     }
     session.rects.push(rect)
     session.results = undefined
+    session.attempts = {}
+    session.translatingIds.clear()
     setRects(session.rects)
-    setRows(session.rects)
+    setRows(session.rects, session.results, "pending", session.attempts, session.translatingIds)
   })
 
   onRectHover((rectId) => {
@@ -121,7 +136,15 @@ function enterTranslateMode() {
     setHoverRectId(rectId)
   })
 
-  setRows(session?.rects ?? [])
+  setRetryHandler((rectId) => {
+    retryRect(rectId)
+  })
+
+  if (session) {
+    setRows(session.rects, session.results, "pending", session.attempts, session.translatingIds)
+  } else {
+    setRows([])
+  }
   setRects(session?.rects ?? [])
   lockScroll()
 }
@@ -144,6 +167,8 @@ function startSession() {
       dpr: window.devicePixelRatio || 1,
     },
     rects: [],
+    attempts: {},
+    translatingIds: new Set(),
   }
 }
 
@@ -154,7 +179,9 @@ function clearSession() {
 async function translateSession() {
   if (!session || session.rects.length === 0) return
 
-  setRows(session.rects, undefined, "translating")
+  session.attempts = {}
+  session.translatingIds = new Set(session.rects.map((rect) => rect.id))
+  setRows(session.rects, undefined, "translating", session.attempts, session.translatingIds)
 
   const response = await sendMessage({
     type: "TRANSLATE_SESSION",
@@ -166,39 +193,46 @@ async function translateSession() {
   })
 
   if (!response || response.type !== "TRANSLATE_SESSION_RESULT") {
+    session.translatingIds.clear()
     handleGlobalFailure("Translation failed")
     return
   }
 
   if (response.error) {
+    session.translatingIds.clear()
     handleGlobalFailure(response.error)
     return
   }
 
   session.results = response.payload.results
-  setRows(session.rects, session.results, "complete")
+  session.translatingIds.clear()
+  session.attempts = {}
+  response.payload.results.forEach((result) => recordAttempt(result.id, result))
+  setRows(session.rects, session.results, "complete", session.attempts, session.translatingIds)
   setRects(session.rects, session.results)
 }
 
 function handleGlobalFailure(message: string) {
   if (!session) return
-  const failed: Result[] = session.rects.map((rect) => ({
-    id: rect.id,
-    jp: "",
-    en: "",
-    error: "failed",
-  }))
-  session.results = failed
-  setRows(session.rects, session.results, "complete")
+  session.attempts = {}
+  session.results = []
+  session.rects.forEach((rect) => {
+    recordAttempt(rect.id, { id: rect.id, jp: "", en: "", error: "failed" })
+  })
+  setRows(session.rects, session.results, "complete", session.attempts, session.translatingIds)
   showToast(message, "error")
 }
 
 function undoLastRect() {
   if (!session || session.rects.length === 0) return
-  session.rects.pop()
+  const removed = session.rects.pop()
   session.results = undefined
+  if (removed) {
+    delete session.attempts[removed.id]
+    session.translatingIds.delete(removed.id)
+  }
   setRects(session.rects)
-  setRows(session.rects)
+  setRows(session.rects, session.results, "pending", session.attempts, session.translatingIds)
 }
 
 function lockScroll() {
@@ -250,14 +284,14 @@ function forceScrollLock() {
   window.scrollTo(scrollLock.x, scrollLock.y)
 }
 
-function sendMessage(message: any): Promise<TranslateSessionResponse | null> {
+function sendMessage(message: any): Promise<TranslateSessionResponse | TranslateRectResponse | null> {
   return new Promise((resolve) => {
     try {
-      ext.runtime.sendMessage(message, (response: TranslateSessionResponse) => {
+      ext.runtime.sendMessage(message, (response: TranslateSessionResponse | TranslateRectResponse) => {
         if (ext.runtime.lastError) {
           resolve(null)
         } else {
-          resolve(response as TranslateSessionResponse)
+          resolve(response as TranslateSessionResponse | TranslateRectResponse)
         }
       })
     } catch {
@@ -265,6 +299,92 @@ function sendMessage(message: any): Promise<TranslateSessionResponse | null> {
       resolve(null)
     }
   })
+}
+
+async function retryRect(rectId: string) {
+  if (!session) return
+  const attempts = session.attempts[rectId]
+  const lastAttempt = attempts?.[attempts.length - 1]
+  if (!lastAttempt || !lastAttempt.error) return
+
+  const failCount = lastAttempt.failCount ?? 1
+  if (failCount >= 3) {
+    showToast("Retry limit reached for this bubble.", "error")
+    return
+  }
+
+  if (session.translatingIds.has(rectId)) return
+  const rect = session.rects.find((item) => item.id === rectId)
+  if (!rect) return
+
+  session.translatingIds.add(rectId)
+  setRows(session.rects, session.results, "complete", session.attempts, session.translatingIds)
+
+  const response = await sendMessage({
+    type: "TRANSLATE_RECT",
+    payload: {
+      rect,
+      viewport: session.viewport,
+      url: session.url,
+    },
+  })
+
+  session.translatingIds.delete(rectId)
+
+  if (!response || response.type !== "TRANSLATE_RECT_RESULT") {
+    handleRectFailure(rectId, "Translation failed")
+    return
+  }
+
+  if (response.error) {
+    handleRectFailure(rectId, response.error)
+    return
+  }
+
+  recordAttempt(rectId, response.payload.result)
+  setRows(session.rects, session.results, "complete", session.attempts, session.translatingIds)
+  setRects(session.rects, session.results)
+}
+
+function handleRectFailure(rectId: string, message: string) {
+  if (!session) return
+  recordAttempt(rectId, { id: rectId, jp: "", en: "", error: "failed" })
+  setRows(session.rects, session.results, "complete", session.attempts, session.translatingIds)
+  setRects(session.rects, session.results)
+  showToast(message, "error")
+}
+
+function recordAttempt(rectId: string, result: Result) {
+  if (!session) return
+  const attempts = session.attempts[rectId] ?? []
+  const nextResult = { ...result }
+
+  if (nextResult.error) {
+    const lastAttempt = attempts[attempts.length - 1]
+    if (lastAttempt?.error) {
+      lastAttempt.failCount = Math.min(3, (lastAttempt.failCount ?? 1) + 1)
+    } else {
+      attempts.push({ ...nextResult, failCount: 1 })
+    }
+  } else {
+    attempts.push(nextResult)
+  }
+
+  session.attempts[rectId] = attempts
+  upsertResult(nextResult)
+}
+
+function upsertResult(result: Result) {
+  if (!session) return
+  if (!session.results) {
+    session.results = []
+  }
+  const index = session.results.findIndex((item) => item.id === result.id)
+  if (index >= 0) {
+    session.results[index] = result
+  } else {
+    session.results.push(result)
+  }
 }
 
 init()

@@ -123,6 +123,38 @@ export const overlayStyles = `
     margin-bottom: 8px;
   }
 
+  .icanmanga-attempt {
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    padding: 8px;
+    margin-bottom: 10px;
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .icanmanga-attempt-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    gap: 8px;
+  }
+
+  .icanmanga-attempt-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--icanmanga-panel-subtext);
+  }
+
+  .icanmanga-attempt-status {
+    font-size: 11px;
+    color: var(--icanmanga-panel-subtext);
+  }
+
+  .icanmanga-attempt-status.error {
+    color: var(--icanmanga-error);
+  }
+
   .icanmanga-text-block {
     background: rgba(0, 0, 0, 0.25);
     border-radius: 8px;

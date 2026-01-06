@@ -6,6 +6,7 @@ import type {
   Rect,
   Result,
   Settings,
+  TranslateRectRequest,
   TranslateSessionRequest,
 } from "../shared/types"
 import { translateImages } from "../providers/openaiVision"
@@ -57,6 +58,19 @@ ext.runtime.onMessage.addListener(
             error: error.message || "Failed to save settings",
           })
         )
+      return true
+    }
+
+    if (message.type === "TRANSLATE_RECT") {
+      handleTranslateRect(message, sender)
+        .then((response) => sendResponse(response))
+        .catch((error) => {
+          sendResponse({
+            type: "TRANSLATE_RECT_RESULT",
+            payload: { result: failedResult(message.payload.rect.id) },
+            error: error.message || "Translation failed",
+          })
+        })
       return true
     }
 
@@ -126,6 +140,41 @@ async function handleTranslate(
   return {
     type: "TRANSLATE_SESSION_RESULT",
     payload: { results, cacheHit: false },
+  }
+}
+
+async function handleTranslateRect(
+  message: TranslateRectRequest,
+  sender: chrome.runtime.MessageSender
+): Promise<BackgroundResponse> {
+  const settings = await getSettings()
+  const apiKey = settings.apiKey || (await loadFileApiKey())
+  if (!apiKey) {
+    return {
+      type: "TRANSLATE_RECT_RESULT",
+      payload: { result: failedResult(message.payload.rect.id) },
+      error: "Missing API key",
+    }
+  }
+
+  const bitmap = await captureVisibleTab(sender.tab?.windowId)
+  const cropResults = await cropRects(bitmap, [message.payload.rect], message.payload.viewport.dpr)
+  bitmap.close()
+
+  const crop = cropResults[0]
+  if (!crop || crop.error || !crop.image) {
+    return {
+      type: "TRANSLATE_RECT_RESULT",
+      payload: { result: failedResult(message.payload.rect.id) },
+      error: "Capture failed",
+    }
+  }
+
+  const providerOutput = await translateImages({ images: [crop.image] }, apiKey)
+  const result = providerOutput.results.find((item) => item.id === message.payload.rect.id)
+  return {
+    type: "TRANSLATE_RECT_RESULT",
+    payload: { result: result ?? failedResult(message.payload.rect.id) },
   }
 }
 
@@ -312,6 +361,10 @@ function storageSet(data: Record<string, any>): Promise<void> {
       }
     })
   })
+}
+
+function failedResult(id: string): Result {
+  return { id, jp: "", en: "", error: "failed" }
 }
 
 async function loadFileApiKey(): Promise<string> {
