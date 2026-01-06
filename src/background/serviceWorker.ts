@@ -69,7 +69,8 @@ async function handleTranslate(
   sender: chrome.runtime.MessageSender
 ): Promise<BackgroundResponse> {
   const settings = await getSettings()
-  if (!settings.apiKey) {
+  const apiKey = settings.apiKey || FLAGS.provider.apiKey
+  if (!apiKey) {
     return {
       type: "TRANSLATE_SESSION_RESULT",
       payload: { results: [], cacheHit: false },
@@ -96,7 +97,7 @@ async function handleTranslate(
 
   let providerResults: Result[] = []
   if (providerImages.length) {
-    const providerOutput = await translateImages({ images: providerImages }, settings.apiKey)
+    const providerOutput = await translateImages({ images: providerImages }, apiKey)
     providerResults = providerOutput.results
   }
 
