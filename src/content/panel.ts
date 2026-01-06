@@ -1,3 +1,4 @@
+import { FLAGS } from "../config/flags"
 import type { Rect, Result } from "../shared/types"
 import { overlayStyles } from "./styles"
 
@@ -18,6 +19,10 @@ export type PanelPhase = "pending" | "translating" | "complete"
 export function mountPanel() {
   if (panelEl) return
   injectStyles()
+  document.documentElement.style.setProperty(
+    "--icanmanga-panel-width",
+    `${FLAGS.panel.widthPx}px`
+  )
   panelEl = document.createElement("div")
   panelEl.className = "icanmanga-panel"
 

@@ -25,7 +25,15 @@ import {
 let session: Session | null = null
 let isTranslateMode = false
 let scrollLock: { x: number; y: number } | null = null
-let originalStyles: { htmlOverflow: string; bodyOverflow: string; bodyTouch: string } | null = null
+let originalStyles:
+  | {
+      htmlOverflow: string
+      bodyOverflow: string
+      bodyTouch: string
+      htmlUserSelect: string
+      bodyUserSelect: string
+    }
+  | null = null
 
 const ext = (globalThis as any).browser ?? chrome
 
@@ -200,10 +208,14 @@ function lockScroll() {
     htmlOverflow: document.documentElement.style.overflow,
     bodyOverflow: document.body.style.overflow,
     bodyTouch: document.body.style.touchAction,
+    htmlUserSelect: document.documentElement.style.userSelect,
+    bodyUserSelect: document.body.style.userSelect,
   }
   document.documentElement.style.overflow = "hidden"
   document.body.style.overflow = "hidden"
   document.body.style.touchAction = "none"
+  document.documentElement.style.userSelect = "none"
+  document.body.style.userSelect = "none"
 
   window.addEventListener("wheel", preventScroll, { passive: false })
   window.addEventListener("touchmove", preventScroll, { passive: false })
@@ -220,6 +232,8 @@ function unlockScroll() {
     document.documentElement.style.overflow = originalStyles.htmlOverflow
     document.body.style.overflow = originalStyles.bodyOverflow
     document.body.style.touchAction = originalStyles.bodyTouch
+    document.documentElement.style.userSelect = originalStyles.htmlUserSelect
+    document.body.style.userSelect = originalStyles.bodyUserSelect
   }
 
   scrollLock = null

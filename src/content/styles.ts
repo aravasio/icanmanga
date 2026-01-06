@@ -64,7 +64,7 @@ export const overlayStyles = `
     position: fixed;
     top: 0;
     right: 0;
-    width: 320px;
+    width: var(--icanmanga-panel-width, 320px);
     height: 100vh;
     z-index: 2147483647;
     background: var(--icanmanga-panel-bg);
