@@ -252,13 +252,18 @@ function forceScrollLock() {
 
 function sendMessage(message: any): Promise<TranslateSessionResponse | null> {
   return new Promise((resolve) => {
-    ext.runtime.sendMessage(message, (response: TranslateSessionResponse) => {
-      if (ext.runtime.lastError) {
-        resolve(null)
-      } else {
-        resolve(response as TranslateSessionResponse)
-      }
-    })
+    try {
+      ext.runtime.sendMessage(message, (response: TranslateSessionResponse) => {
+        if (ext.runtime.lastError) {
+          resolve(null)
+        } else {
+          resolve(response as TranslateSessionResponse)
+        }
+      })
+    } catch {
+      showToast("Extension reloaded. Reload the page and try again.", "error")
+      resolve(null)
+    }
   })
 }
 
