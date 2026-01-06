@@ -1,4 +1,4 @@
-# Manga Translation Extension — MVP Spec
+# Manga Translation Extension — MVP Spec (Revised)
 
 ## 1. Goal
 
@@ -12,11 +12,15 @@ This avoids automatic bubble detection and maximizes UX while keeping the MVP si
 
 ## 2. Supported Browsers
 
-- Chrome (Manifest V3)
-- Arc (Chromium-based, same as Chrome)
-- Firefox (WebExtensions, small API adapter)
+### 2.1 Targets
+- **Chrome** (Manifest V3)
+- **Arc** (Chromium-based, same as Chrome)
+- **Firefox** (WebExtensions support)
 
-Design must avoid Chrome-only assumptions.
+### 2.2 Compatibility Notes (MVP)
+- MVP **must work** on Chrome/Arc.
+- Firefox is supported, but any browser gaps (especially around screenshot capture timing/permissions) may require small adjustments.
+- The **side panel UI is implemented as an injected DOM panel**, not a browser-native “side panel” API, for maximum cross-browser compatibility.
 
 ---
 
@@ -27,6 +31,7 @@ Design must avoid Chrome-only assumptions.
 - Editing or modifying the underlying image
 - Multi-site heuristics beyond “works on RawSakura in practice”
 - Incremental streaming translation (batch per session only)
+- Persisting sessions across page reloads
 
 ---
 
@@ -60,7 +65,22 @@ When Translate Mode is **ON**:
    - number badge (`#1`, `#2`, …)
 5. Maximum rectangles per session: **15**
 
-**Undo**
+#### 4.2.1 Context Takeover (No Scrolling / No Page Interaction)
+Translate Mode is a full “control takeover”:
+- **No page scrolling is allowed** while Translate Mode is ON.
+  - Prevent wheel/trackpad scrolling
+  - Prevent keyboard scrolling (`Space`, `PageUp/Down`, `Home/End`, arrows)
+  - Prevent touch scrolling (if applicable)
+- **Underlying page interaction is blocked**:
+  - Pointer events do not reach the page
+  - Text selection is disabled
+
+Implementation note:
+- On entering Translate Mode, store `scrollX/scrollY` and:
+  - prevent scroll events, and
+  - optionally enforce `window.scrollTo(savedX, savedY)` as a safety net.
+
+#### Undo
 - Ctrl/Cmd+Z removes the **last rectangle** only
 - Updates overlay + side panel
 - No effect if session is empty
@@ -84,25 +104,29 @@ When Translate Mode is **ON**:
 - Displays:
   - selection rectangle during drag
   - persistent numbered rectangles after selection
-- Overlay tracks viewport scrolling (no independent scroll)
+- Overlay is fixed to the viewport (and does not need to track scroll, since scrolling is disabled in Translate Mode)
 
 ---
 
 ### 5.2 Side Panel (Primary Output UI)
 
-A fixed side panel (right side of viewport) containing a list:
+A fixed side panel (right side of viewport) implemented as an **injected DOM panel** containing a list.
 
 For each rectangle `#N`:
 - Status:
   - before translation: `#N (pending)`
+  - during translation: `#N (translating...)`
   - after translation:
     - JP text (copy button)
     - EN text (copy button)
+  - failure / unreadable:
+    - show `#N (failed)` or `#N (unreadable)`
+    - show warning text (from `warnings[]`) if available
 - Hovering a row highlights its rectangle
 - Hovering a rectangle highlights its row
 - Row background color matches rectangle highlight color
 
-No English text is rendered on top of the image in MVP.
+**No English text is rendered on top of the image in MVP.**
 
 ---
 
@@ -111,6 +135,7 @@ No English text is rendered on top of the image in MVP.
 Clicking a rectangle may optionally open a small popup near it showing:
 - JP text + copy
 - EN text + copy
+- Any warnings
 
 This is secondary; the side panel is authoritative.
 
@@ -165,6 +190,7 @@ Steps:
 2. Convert rects from CSS pixels → screenshot pixels via DPR scaling
 3. Clamp to bitmap bounds
 4. Crop each rectangle into its own image
+5. **Downscale each crop to a max dimension** to bound latency and request size (see Config/Flags)
 
 Each crop becomes one AI input.
 
@@ -196,12 +222,14 @@ Single provider for MVP.
     en: string
     confidence?: number
     warnings?: string[]
+    error?: string
   }>
 }
 ```
 
 - `id` preserves mapping and order
 - Order is defined **only by user selection order**
+- `error` is for hard failures per item; `warnings` are soft issues (low confidence, partial text, etc.)
 
 ---
 
@@ -213,10 +241,23 @@ Single provider for MVP.
   - OCR Japanese text **as-is**
   - Translate to natural English
   - Treat each image independently
-  - Return strict JSON only
+  - Return **strict JSON only** (no markdown)
 
 Failure handling:
-- Empty or unreadable text → return empty strings + warning
+- Empty or unreadable text → return empty strings + warning, not a whole-session failure
+- If the request fails entirely (network/auth/provider):
+  - mark each row as failed and show a single toast
+
+---
+
+### 7.3 API Key Handling (MVP)
+
+- User provides an API key via **extension options/settings UI**.
+- Key is stored in extension storage:
+  - Chrome/Arc: `chrome.storage.local`
+  - Firefox: `browser.storage.local`
+- Key is never injected into the page or content scripts.
+- Background/service worker performs provider calls.
 
 ---
 
@@ -239,6 +280,7 @@ type Session = {
 
 - Session exists only while Translate Mode is ON
 - Cleared on Esc
+- Session is not persisted across reloads
 
 ---
 
@@ -251,6 +293,8 @@ type Session = {
   url: string
   viewport: { w, h, dpr }
   rectsNormalized: Array<{ x, y, w, h }>
+  provider: string
+  model: string
 }
 ```
 
@@ -261,7 +305,7 @@ type Session = {
 
 ```ts
 {
-  results: Array<{ id, jp, en }>
+  results: Array<{ id, jp, en, warnings?, error? }>
   timestamp: number
 }
 ```
@@ -270,41 +314,81 @@ Storage:
 - `chrome.storage.local` / `browser.storage.local`
 
 Eviction:
-- Max ~200 entries
+- Max ~200 entries (configurable)
 - Remove oldest on overflow
 
 ---
 
 ## 10. Error Handling (MVP)
 
+Global:
 - Screenshot failure → toast: “Capture failed”
-- AI failure → toast: “Translation failed”
+- Provider/network/auth failure → toast: “Translation failed”
 - Enter with zero rectangles → no-op
 - Exceed max rectangles → toast: “Max 15 selections”
 
+Per-rect:
+- Unreadable OCR → row shows warning (“Unreadable”)
+- Partial OCR → row shows warning (“Partial text”)
+- Per-rect crop failure → row shows `failed`
+
 ---
 
-## 11. Project Structure (Suggested)
+## 11. Config / Flags
+
+All tunables must live in a single config module (no magic numbers).
+
+Suggested file:
+- `src/config/flags.ts`
+
+Example shape:
+
+```ts
+export const FLAGS = {
+  maxRectsPerSession: 15,
+  crop: {
+    maxDimensionPx: 1024,        // downscale crops so max(w,h) <= this
+    outputMime: "image/png" as const,
+  },
+  cache: {
+    maxEntries: 200,
+    rectRoundingDecimals: 4,
+  },
+  hotkeys: {
+    toggleTranslateMode: "Alt+T",
+    translateSession: "Enter",
+    undo: ["Ctrl+Z", "Cmd+Z"],
+    exit: "Escape",
+  },
+}
+```
+
+---
+
+## 12. Project Structure (Suggested)
 
 ```
 src/
 ├─ config/
-│  └─ hotkeys.ts
+│  ├─ hotkeys.ts          // hotkey normalization + parsing
+│  └─ flags.ts            // all tunables (max rects, crop size, cache, etc.)
 ├─ content/
-│  ├─ content.ts        // mode toggle, event wiring
-│  ├─ overlay.ts        // selection + rectangle rendering
-│  └─ panel.ts          // side panel UI
+│  ├─ content.ts          // mode toggle, event wiring, scroll lock
+│  ├─ overlay.ts          // selection + rectangle rendering
+│  └─ panel.ts            // injected DOM side panel UI
 ├─ background/
-│  └─ serviceWorker.ts  // screenshot, crop, provider, cache
+│  └─ serviceWorker.ts    // screenshot, crop, provider, cache
 ├─ providers/
 │  └─ openaiVision.ts
 ├─ shared/
 │  └─ types.ts
+└─ options/
+   └─ options.ts          // API key input UI (MVP)
 ```
 
 ---
 
-## 12. Manifest Requirements
+## 13. Manifest Requirements
 
 - Manifest V3
 - Permissions:
@@ -316,11 +400,12 @@ No host permissions required for MVP.
 
 ---
 
-## 13. Success Criteria
+## 14. Success Criteria
 
 On a RawSakura chapter page, user can:
 
 - Enter Translate Mode
+- Page becomes non-interactive (no scrolling)
 - Select multiple bubbles in order
 - Undo selections with Ctrl/Cmd+Z
 - Translate all selections with Enter
@@ -330,7 +415,7 @@ On a RawSakura chapter page, user can:
 
 ---
 
-## 14. Future Extensions (Explicitly Out of Scope)
+## 15. Future Extensions (Explicitly Out of Scope)
 
 - Auto bubble detection
 - On-image English text rendering
