@@ -25,6 +25,10 @@ type Result = {
   error?: string
 }
 
+type Attempt = Result & {
+  failCount?: number
+}
+
 type Session = {
   url: string
   viewport: { width: number, height: number, dpr: number }
@@ -36,6 +40,8 @@ type Session = {
 ## Message Types
 - `TRANSLATE_SESSION` request
 - `TRANSLATE_SESSION_RESULT` response
+- `TRANSLATE_RECT` request
+- `TRANSLATE_RECT_RESULT` response
 - Settings messages for API key storage
 
 ## Behavioral Rules

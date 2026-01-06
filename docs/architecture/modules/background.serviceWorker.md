@@ -10,6 +10,7 @@ Runs in extension background context. Performs capture, cropping, provider calls
 - Encode crops to base64 and send to provider.
 - Cache results and return them to content script.
 - Expose options storage for API key.
+- Fall back to `public/secrets.txt` for local development.
 
 ## Public Interface
 - Message handlers for:
@@ -66,5 +67,5 @@ Runs in extension background context. Performs capture, cropping, provider calls
 - `shared/types.ts`
 
 ## Notes
-- API key is read from extension storage and never sent to content scripts.
+- API key is read from extension storage (or `public/secrets.txt` fallback) and never sent to content scripts.
 - Service worker should tolerate being restarted; no long-lived state required.

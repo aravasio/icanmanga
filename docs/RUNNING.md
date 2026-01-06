@@ -28,6 +28,9 @@ The build output lands in `dist/`.
 
 The key is stored in extension local storage.
 
+Optional: for local dev, you can place a key in `public/secrets.txt` (one line). This
+file is gitignored and used as a fallback if Options has no key.
+
 ## Try it out
 
 - Open a manga page in the browser.
@@ -36,6 +39,7 @@ The key is stored in extension local storage.
   - Translate current session: `Enter`
   - Undo last selection: `Ctrl+Z` / `Cmd+Z`
   - Exit translate mode: `Escape`
+- Failed bubbles show a Retry button and keep previous attempts stacked for comparison.
 
 ## Iterating on changes
 

@@ -54,6 +54,6 @@ All messages between content and background are JSON serializable. See `docs/arc
 - Global failures (capture/provider) should mark all pending rects failed and show a single toast.
 
 ### Security and Privacy
-- API key stored in extension local storage only.
+- API key stored in extension local storage; local dev may also use `public/secrets.txt` fallback.
 - Cropped images are sent only to the provider; no persistence beyond cache.
 - Content script never touches API key or provider directly.

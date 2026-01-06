@@ -8,8 +8,17 @@ MVP browser extension for manual manga bubble selection, OCR (Japanese), and Eng
 - `docs/RUNNING.md` - how to build and run the extension locally
 
 ## Status
-Architecture specification only. Implementation not included.
+Working MVP with content script, background service worker, and options UI.
+
+## Quick Start
+```bash
+npm install
+npm run build
+```
+
+Load `dist/` as an unpacked extension in `chrome://extensions`, then add your API key
+in Options or via `public/secrets.txt`.
 
 ## Next Steps
-- Implement modules under `src/` per the architecture docs.
-- Create manifest and build tooling.
+- Improve retry UX and edit mode tooling.
+- Expand provider options and model selection.

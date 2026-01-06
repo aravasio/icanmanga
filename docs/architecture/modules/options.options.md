@@ -7,6 +7,7 @@ Implements the options/settings UI for storing the provider API key.
 - Render a simple UI to input and save the API key.
 - Validate that the key is non-empty before save.
 - Read/write key to extension local storage.
+- Local dev fallback can be loaded from `public/secrets.txt` if storage is empty.
 
 ## Public Interface
 - Options page entry point that:
