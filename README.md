@@ -5,6 +5,7 @@ MVP browser extension for manual manga bubble selection, OCR (Japanese), and Eng
 ## Docs
 - `spec.md` - MVP spec
 - `docs/architecture/ARCHITECTURE.md` - detailed architecture and module specs
+- `docs/RUNNING.md` - how to build and run the extension locally
 
 ## Status
 Architecture specification only. Implementation not included.
