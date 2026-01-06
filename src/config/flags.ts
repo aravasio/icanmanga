@@ -21,6 +21,5 @@ export const FLAGS = {
   provider: {
     model: "gpt-4o-mini",
     endpoint: "https://api.openai.com/v1/chat/completions",
-    apiKey: "",
   },
 }

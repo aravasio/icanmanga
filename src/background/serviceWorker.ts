@@ -64,12 +64,14 @@ ext.runtime.onMessage.addListener(
   }
 )
 
+let cachedFileApiKey: string | null = null
+
 async function handleTranslate(
   message: TranslateSessionRequest,
   sender: chrome.runtime.MessageSender
 ): Promise<BackgroundResponse> {
   const settings = await getSettings()
-  const apiKey = settings.apiKey || FLAGS.provider.apiKey
+  const apiKey = settings.apiKey || (await loadFileApiKey())
   if (!apiKey) {
     return {
       type: "TRANSLATE_SESSION_RESULT",
@@ -309,4 +311,25 @@ function storageSet(data: Record<string, any>): Promise<void> {
       }
     })
   })
+}
+
+async function loadFileApiKey(): Promise<string> {
+  if (cachedFileApiKey !== null) {
+    return cachedFileApiKey
+  }
+
+  try {
+    const url = ext.runtime.getURL("secrets.txt")
+    const response = await fetch(url)
+    if (!response.ok) {
+      cachedFileApiKey = ""
+      return cachedFileApiKey
+    }
+    const text = (await response.text()).trim()
+    cachedFileApiKey = text
+    return cachedFileApiKey
+  } catch {
+    cachedFileApiKey = ""
+    return cachedFileApiKey
+  }
 }
