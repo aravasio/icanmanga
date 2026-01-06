@@ -137,7 +137,8 @@ async function captureVisibleTab(windowId?: number): Promise<ImageBitmap> {
       (url: string) => {
         const err = ext.runtime.lastError
         if (err || !url) {
-          reject(new Error("Capture failed"))
+          const message = err?.message ? `Capture failed: ${err.message}` : "Capture failed"
+          reject(new Error(message))
           return
         }
         resolve(url)
