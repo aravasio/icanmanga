@@ -4,6 +4,7 @@
   "description": "Manual manga OCR + translation with numbered overlays.",
   "version": "0.1.0",
   "permissions": ["activeTab", "scripting", "storage", "tabs"],
+  "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js",
     "type": "module"
